@@ -315,4 +315,89 @@ public final class ChargeSqlReadRepository {
             excludeClause.append(" ");
         }
     }
+
+    public List<ChargeData> savingsProductApplicableCharges(final boolean feeChargesOnly) {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
+        if (feeChargesOnly) {
+            sql = "select " + rm.chargeSchema()
+                    + " where c.is_deleted=false and c.is_active=true and c.is_penalty=false and c.charge_applies_to_enum=? ";
+        }
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SAVINGS.getValue() }); // NOSONAR
+    }
+
+    public List<ChargeData> savingsApplicablePenalties() {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.chargeSchema()
+                + " where c.is_deleted=false and c.is_active=true and c.is_penalty=true and c.charge_applies_to_enum=? ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SAVINGS.getValue() }); // NOSONAR
+    }
+
+    public List<ChargeData> savingsProductCharges(final Long savingsProductId) {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.savingsProductChargeSchema()
+                + " where c.is_deleted=false and c.is_active=true and spc.savings_product_id=? ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { savingsProductId }); // NOSONAR
+    }
+
+    public List<ChargeData> shareProductCharges(final Long shareProductId) {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.shareProductChargeSchema() + " where c.is_deleted=false and c.is_active=true and mspc.product_id=? ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { shareProductId }); // NOSONAR
+    }
+
+    public List<ChargeData> workingCapitalLoanAccountApplicableCharges(Long loanId) {
+        final ChargeMapper rm = new ChargeMapper();
+        Map<String, Object> paramMap = new HashMap<>();
+        paramMap.put("loanId", loanId);
+        paramMap.put("chargeAppliesTo", ChargeAppliesTo.WORKING_CAPITAL_LOAN.getValue());
+        paramMap.put("chargeTimeTypes", ChargeTimeType.validWorkingCapitalLoanAccountValues());
+        String sql = "select " + rm.chargeSchema() + " join m_wc_loan la on la.currency_code = c.currency_code" + " where la.id=:loanId"
+                + " and c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=:chargeAppliesTo"
+                + " and c.charge_time_enum in (:chargeTimeTypes) ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+        return this.namedParameterJdbcTemplate.query(sql, paramMap, rm);
+    }
+
+    public List<ChargeData> savingsAccountApplicableCharges(Long savingsAccountId) {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.chargeSchema() + " join m_savings_account sa on sa.currency_code = c.currency_code"
+                + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? " + " and sa.id = ?";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SAVINGS.getValue(), savingsAccountId }); // NOSONAR
+    }
+
+    public List<ChargeData> allChargesApplicableToClients() {
+        final ChargeMapper rm = new ChargeMapper();
+        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.CLIENT.getValue() }); // NOSONAR
+    }
+
+    public List<ChargeData> sharesApplicableCharges() {
+        final ChargeMapper rm = new ChargeMapper();
+        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=? ";
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.SHARES.getValue() }); // NOSONAR
+    }
 }
