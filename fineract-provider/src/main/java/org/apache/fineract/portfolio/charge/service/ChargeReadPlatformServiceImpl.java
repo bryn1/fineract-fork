@@ -177,98 +177,32 @@ public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService 
 
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId) {
-        final ChargeMapper rm = new ChargeMapper();
-
-        String sql = "select " + rm.loanProductChargeSchema() + " where c.is_deleted=false and c.is_active=true and plc.product_loan_id=? ";
-
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-
-        return this.jdbcTemplate.query(sql, rm, new Object[] { loanProductId }); // NOSONAR
+        return this.chargeSqlRepository.loanProductCharges(loanProductId);
     }
 
     @Override
     public List<ChargeData> retrieveLoanProductCharges(final Long loanProductId, final ChargeTimeType chargeTime) {
-
-        final ChargeMapper rm = new ChargeMapper();
-
-        String sql = "select " + rm.loanProductChargeSchema()
-                + " where c.is_deleted=false and c.is_active=true and plc.product_loan_id=? and c.charge_time_enum=? ";
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-
-        return this.jdbcTemplate.query(sql, rm, new Object[] { loanProductId, chargeTime.getValue() }); // NOSONAR
+        return this.chargeSqlRepository.loanProductCharges(loanProductId, chargeTime);
     }
 
     @Override
     public List<ChargeData> retrieveLoanApplicableFees() {
-        final ChargeMapper rm = new ChargeMapper();
-        Object[] params = new Object[] { ChargeAppliesTo.LOAN.getValue() };
-        String sql = "select " + rm.chargeSchema()
-                + " where c.is_deleted=false and c.is_active=true and c.is_penalty=false and c.charge_applies_to_enum=? ";
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-        sql += " order by c.name ";
-
-        return this.jdbcTemplate.query(sql, rm, params); // NOSONAR
+        return this.chargeSqlRepository.loanApplicableFees();
     }
 
     @Override
     public List<ChargeData> retrieveLoanAccountApplicableCharges(final Long loanId, ChargeTimeType[] excludeChargeTimes) {
-        final ChargeMapper rm = new ChargeMapper();
-        StringBuilder excludeClause = new StringBuilder("");
-        Map<String, Object> paramMap = new HashMap<>();
-        paramMap.put("loanId", loanId);
-        paramMap.put("chargeAppliesTo", ChargeAppliesTo.LOAN.getValue());
-        processChargeExclusionsForLoans(excludeChargeTimes, excludeClause);
-        String sql = "select " + rm.chargeSchema() + " join m_loan la on la.currency_code = c.currency_code" + " where la.id=:loanId"
-                + " and c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=:chargeAppliesTo" + excludeClause + " ";
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-        sql += " order by c.name ";
-        return this.namedParameterJdbcTemplate.query(sql, paramMap, rm);
-    }
-
-    /**
-     * @param excludeChargeTimes
-     * @param excludeClause
-     */
-    private void processChargeExclusionsForLoans(ChargeTimeType[] excludeChargeTimes, StringBuilder excludeClause) {
-        if (excludeChargeTimes != null && excludeChargeTimes.length > 0) {
-            StringBuilder sb = new StringBuilder();
-            for (int i = 0; i < excludeChargeTimes.length; i++) {
-                if (i != 0) {
-                    sb.append(",");
-                }
-                sb.append(excludeChargeTimes[i].getValue());
-            }
-            excludeClause = excludeClause.append(" and c.charge_time_enum not in(" + sb.toString() + ") ");
-            excludeClause.append(" ");
-        }
+        return this.chargeSqlRepository.loanAccountApplicableCharges(loanId, excludeChargeTimes);
     }
 
     @Override
     public List<ChargeData> retrieveLoanProductApplicableCharges(final Long loanProductId, ChargeTimeType[] excludeChargeTimes) {
-        final ChargeMapper rm = new ChargeMapper();
-        StringBuilder excludeClause = new StringBuilder("");
-        Map<String, Object> paramMap = new HashMap<>();
-        paramMap.put("productId", loanProductId);
-        paramMap.put("chargeAppliesTo", ChargeAppliesTo.LOAN.getValue());
-        processChargeExclusionsForLoans(excludeChargeTimes, excludeClause);
-        String sql = "select " + rm.chargeSchema() + " join m_product_loan lp on lp.currency_code = c.currency_code"
-                + " where lp.id=:productId" + " and c.is_deleted=false and c.is_active=true and c.charge_applies_to_enum=:chargeAppliesTo"
-                + excludeClause + " ";
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-        sql += " order by c.name ";
-
-        return this.namedParameterJdbcTemplate.query(sql, paramMap, rm);
+        return this.chargeSqlRepository.loanProductApplicableCharges(loanProductId, excludeChargeTimes);
     }
 
     @Override
     public List<ChargeData> retrieveLoanApplicablePenalties() {
-        final ChargeMapper rm = new ChargeMapper();
-
-        String sql = "select " + rm.chargeSchema()
-                + " where c.is_deleted=false and c.is_active=true and c.is_penalty=true and c.charge_applies_to_enum=? ";
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-        sql += " order by c.name ";
-        return this.jdbcTemplate.query(sql, rm, new Object[] { ChargeAppliesTo.LOAN.getValue() }); // NOSONAR
+        return this.chargeSqlRepository.loanApplicablePenalties();
     }
 
     private String addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled() {
