@@ -45,7 +45,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * S1 characterization suite, DA cycle-2 addition (MC 11150, finding F-2): pins the tag-resolution path
@@ -65,8 +64,6 @@ class GLAccountWritePlatformServiceTagResolutionCharacterizationTest {
     private ProductToGLAccountMappingRepository productToGLAccountMappingRepository;
     @Mock
     private CodeValueRepositoryWrapper codeValueRepositoryWrapper;
-    @Mock
-    private JdbcTemplate jdbcTemplate;
 
     private final FromJsonHelper fromJsonHelper = new FromJsonHelper();
 
@@ -76,7 +73,7 @@ class GLAccountWritePlatformServiceTagResolutionCharacterizationTest {
     void setUp() {
         service = new GLAccountWritePlatformServiceJpaRepositoryImpl(glAccountRepository, glJournalEntryRepository,
                 productToGLAccountMappingRepository, new GLAccountCommandFromApiJsonDeserializer(fromJsonHelper),
-                codeValueRepositoryWrapper, jdbcTemplate);
+                codeValueRepositoryWrapper);
     }
 
     private JsonCommand commandFrom(String json) {

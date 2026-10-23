@@ -110,4 +110,11 @@ public interface ProductToGLAccountMappingRepository
     ProductToGLAccountMapping findWriteOffReasonMapping(@Param("productId") Long productId, @Param("productType") Integer productType,
             @Param("writeOffReasonId") Long writeOffReasonId);
 
+    /***
+     * S3 peel (MC 11163): the COUNT the GL-account disable guard used to run through an injected JdbcTemplate.
+     * SQL moved verbatim; only the parameter marker adopts the repository mechanism's named syntax.
+     ***/
+    @Query(value = "select count(*) from acc_product_mapping acc where acc.gl_account_id = :glAccountId", nativeQuery = true)
+    Long countAttachedProducts(@Param("glAccountId") Long glAccountId);
+
 }

@@ -23,8 +23,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -54,7 +52,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.jpa.domain.Specification;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * S1 characterization suite (MC 11150): pins update/delete-path behavior of
@@ -74,8 +71,6 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     private ProductToGLAccountMappingRepository productToGLAccountMappingRepository;
     @Mock
     private CodeValueRepositoryWrapper codeValueRepositoryWrapper;
-    @Mock
-    private JdbcTemplate jdbcTemplate;
 
     private final FromJsonHelper fromJsonHelper = new FromJsonHelper();
 
@@ -85,7 +80,7 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     void setUp() {
         service = new GLAccountWritePlatformServiceJpaRepositoryImpl(glAccountRepository, glJournalEntryRepository,
                 productToGLAccountMappingRepository, new GLAccountCommandFromApiJsonDeserializer(fromJsonHelper),
-                codeValueRepositoryWrapper, jdbcTemplate);
+                codeValueRepositoryWrapper);
     }
 
     private JsonCommand commandFrom(String json) {
@@ -181,9 +176,11 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
 
     @Test
     void disablingAnAccountAttachedToAProductIsRejected() {
-        // CHARACTERIZED: the disable guard runs a raw COUNT on acc_product_mapping through JdbcTemplate
-        // BEFORE the account is even loaded — pinned as current shape; S2 decides whether it belongs in a validator.
-        when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), any(Object[].class))).thenReturn(1);
+        // S2-MOVED PIN (MC 11163 S3 peel): the disable guard's COUNT on acc_product_mapping moved from an
+        // injected JdbcTemplate to the module's ProductToGLAccountMappingRepository.countAttachedProducts
+        // (native query, same SQL). The guard still runs BEFORE the account is loaded; the pinned observable
+        // (GLAccountDisableException with error.msg.glaccount.attached.to.product) is unchanged.
+        when(productToGLAccountMappingRepository.countAttachedProducts(GL_ACCOUNT_ID)).thenReturn(1L);
 
         JsonCommand command = commandFrom("{\"disabled\":true}");
         GLAccountDisableException ex = assertThrows(GLAccountDisableException.class,

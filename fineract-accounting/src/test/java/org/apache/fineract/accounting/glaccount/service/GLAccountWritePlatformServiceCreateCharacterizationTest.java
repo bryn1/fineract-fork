@@ -48,7 +48,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
  * S1 characterization suite (MC 11150): pins create-path behavior of
@@ -65,8 +64,6 @@ class GLAccountWritePlatformServiceCreateCharacterizationTest {
     private ProductToGLAccountMappingRepository productToGLAccountMappingRepository;
     @Mock
     private CodeValueRepositoryWrapper codeValueRepositoryWrapper;
-    @Mock
-    private JdbcTemplate jdbcTemplate;
 
     private final FromJsonHelper fromJsonHelper = new FromJsonHelper();
 
@@ -77,7 +74,7 @@ class GLAccountWritePlatformServiceCreateCharacterizationTest {
         // real deserializer on purpose: pins the create path as composed today (JSON -> command -> entity)
         service = new GLAccountWritePlatformServiceJpaRepositoryImpl(glAccountRepository, glJournalEntryRepository,
                 productToGLAccountMappingRepository, new GLAccountCommandFromApiJsonDeserializer(fromJsonHelper),
-                codeValueRepositoryWrapper, jdbcTemplate);
+                codeValueRepositoryWrapper);
     }
 
     private JsonCommand commandFrom(String json) {
