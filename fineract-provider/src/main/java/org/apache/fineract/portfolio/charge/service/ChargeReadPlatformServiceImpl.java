@@ -26,7 +26,6 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import lombok.RequiredArgsConstructor;
 import org.apache.fineract.accounting.common.AccountingDropdownReadPlatformService;
 import org.apache.fineract.accounting.glaccount.data.GLAccountData;
 import org.apache.fineract.infrastructure.configuration.domain.ConfigurationDomainServiceJpa;
@@ -40,6 +39,7 @@ import org.apache.fineract.organisation.monetary.service.CurrencyReadPlatformSer
 import org.apache.fineract.portfolio.charge.data.ChargeData;
 import org.apache.fineract.portfolio.charge.domain.ChargeAppliesTo;
 import org.apache.fineract.portfolio.charge.domain.ChargeTimeType;
+import org.apache.fineract.portfolio.charge.domain.ChargeSqlReadRepository;
 import org.apache.fineract.portfolio.charge.exception.ChargeNotFoundException;
 import org.apache.fineract.portfolio.common.service.CommonEnumerations;
 import org.apache.fineract.portfolio.common.service.DropdownReadPlatformService;
@@ -57,57 +57,56 @@ import org.springframework.transaction.annotation.Transactional;
  * @author vishwas
  *
  */
-@RequiredArgsConstructor
 @Transactional(readOnly = true)
 public class ChargeReadPlatformServiceImpl implements ChargeReadPlatformService {
 
     private final CurrencyReadPlatformService currencyReadPlatformService;
     private final ChargeDropdownReadPlatformService chargeDropdownReadPlatformService;
-    private final JdbcTemplate jdbcTemplate;
     private final DropdownReadPlatformService dropdownReadPlatformService;
-    private final FineractEntityAccessUtil fineractEntityAccessUtil;
     private final AccountingDropdownReadPlatformService accountingDropdownReadPlatformService;
     private final TaxReadPlatformService taxReadPlatformService;
     private final ConfigurationDomainServiceJpa configurationDomainServiceJpa;
+    private final JdbcTemplate jdbcTemplate;
+    private final FineractEntityAccessUtil fineractEntityAccessUtil;
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    // S4b PEEL (MC 11183): SQL moved to the charge-domain repository (research/04 S4-B row); constructor
+    // signature FROZEN - the JDBC collaborators flow into the repository as well as being held here
+    // during the per-site-cluster move (fields removed when the last site has delegated).
+    private final ChargeSqlReadRepository chargeSqlRepository;
+
+    public ChargeReadPlatformServiceImpl(final CurrencyReadPlatformService currencyReadPlatformService,
+            final ChargeDropdownReadPlatformService chargeDropdownReadPlatformService, final JdbcTemplate jdbcTemplate,
+            final DropdownReadPlatformService dropdownReadPlatformService, final FineractEntityAccessUtil fineractEntityAccessUtil,
+            final AccountingDropdownReadPlatformService accountingDropdownReadPlatformService,
+            final TaxReadPlatformService taxReadPlatformService, final ConfigurationDomainServiceJpa configurationDomainServiceJpa,
+            final NamedParameterJdbcTemplate namedParameterJdbcTemplate) {
+        this.currencyReadPlatformService = currencyReadPlatformService;
+        this.chargeDropdownReadPlatformService = chargeDropdownReadPlatformService;
+        this.dropdownReadPlatformService = dropdownReadPlatformService;
+        this.accountingDropdownReadPlatformService = accountingDropdownReadPlatformService;
+        this.taxReadPlatformService = taxReadPlatformService;
+        this.configurationDomainServiceJpa = configurationDomainServiceJpa;
+        this.jdbcTemplate = jdbcTemplate;
+        this.fineractEntityAccessUtil = fineractEntityAccessUtil;
+        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
+        this.chargeSqlRepository = new ChargeSqlReadRepository(jdbcTemplate, namedParameterJdbcTemplate, fineractEntityAccessUtil);
+    }
 
     @Override
     @Cacheable(value = "charges", key = "T(org.apache.fineract.infrastructure.core.service.ThreadLocalContextUtil).getTenant().getTenantIdentifier().concat('ch')")
     public List<ChargeData> retrieveAllCharges() {
-        final ChargeMapper rm = new ChargeMapper();
-
-        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false ";
-
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-
-        sql += " order by c.name ";
-
-        return this.jdbcTemplate.query(sql, rm); // NOSONAR
+        return this.chargeSqlRepository.allCharges();
     }
 
     @Override
     public List<ChargeData> retrieveAllChargesForCurrency(String currencyCode) {
-        final ChargeMapper rm = new ChargeMapper();
-
-        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.currency_code= ? ";
-
-        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-        sql += " order by c.name ";
-
-        return this.jdbcTemplate.query(sql, rm, new Object[] { currencyCode }); // NOSONAR
+        return this.chargeSqlRepository.allChargesForCurrency(currencyCode);
     }
 
     @Override
     public ChargeData retrieveCharge(final Long chargeId) {
         try {
-            final ChargeMapper rm = new ChargeMapper();
-
-            String sql = "select " + rm.chargeSchema() + " where c.id = ? and c.is_deleted=false ";
-
-            sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
-
-            sql = sql + " ;";
-            return this.jdbcTemplate.queryForObject(sql, rm, new Object[] { chargeId }); // NOSONAR
+            return this.chargeSqlRepository.chargeById(chargeId);
         } catch (final EmptyResultDataAccessException e) {
             throw new ChargeNotFoundException(chargeId, e);
         }

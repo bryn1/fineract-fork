@@ -1,0 +1,233 @@
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements. See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership. The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+package org.apache.fineract.portfolio.charge.domain;
+
+import java.math.BigDecimal;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.time.MonthDay;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.apache.fineract.accounting.glaccount.data.GLAccountData;
+import org.apache.fineract.infrastructure.core.data.EnumOptionData;
+import org.apache.fineract.infrastructure.core.domain.JdbcSupport;
+import org.apache.fineract.infrastructure.core.service.DateUtils;
+import org.apache.fineract.infrastructure.entityaccess.domain.FineractEntityType;
+import org.apache.fineract.infrastructure.entityaccess.service.FineractEntityAccessUtil;
+import org.apache.fineract.organisation.monetary.data.CurrencyData;
+import org.apache.fineract.portfolio.charge.data.ChargeData;
+import org.apache.fineract.portfolio.charge.service.ChargeEnumerations;
+import org.apache.fineract.portfolio.common.service.CommonEnumerations;
+import org.apache.fineract.portfolio.paymenttype.data.PaymentTypeData;
+import org.apache.fineract.portfolio.tax.data.TaxGroupData;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+
+/**
+ * S4b PEEL (MC 11183): the SQL path of the charge read side, moved BYTE-IDENTICAL from
+ * ChargeReadPlatformServiceImpl (pin 355287c8). Every statement string, schema fragment, office-scoping
+ * in-clause, exclusion clause and the ChargeMapper itself are carried verbatim; row-mapping and
+ * exception semantics are untouched. The repository wraps the SAME JdbcTemplate /
+ * NamedParameterJdbcTemplate collaborators the service received before the peel - the SQL-execution
+ * technology is unchanged; only the seam moved (route "relax", research/04 S4-B row: a charge-domain
+ * repository holding wrapped Spring JdbcTemplate instances; NO new executor, NO new module edges;
+ * charge never touches AccountingNativeSqlExecutor).
+ */
+public final class ChargeSqlReadRepository {
+
+    private final JdbcTemplate jdbcTemplate;
+    private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final FineractEntityAccessUtil fineractEntityAccessUtil;
+
+    public ChargeSqlReadRepository(final JdbcTemplate jdbcTemplate, final NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+            final FineractEntityAccessUtil fineractEntityAccessUtil) {
+        this.jdbcTemplate = jdbcTemplate;
+        this.namedParameterJdbcTemplate = namedParameterJdbcTemplate;
+        this.fineractEntityAccessUtil = fineractEntityAccessUtil;
+    }
+
+    public List<ChargeData> allCharges() {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false ";
+
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+
+        sql += " order by c.name ";
+
+        return this.jdbcTemplate.query(sql, rm); // NOSONAR
+    }
+
+    public List<ChargeData> allChargesForCurrency(String currencyCode) {
+        final ChargeMapper rm = new ChargeMapper();
+
+        String sql = "select " + rm.chargeSchema() + " where c.is_deleted=false and c.currency_code= ? ";
+
+        sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+        sql += " order by c.name ";
+
+        return this.jdbcTemplate.query(sql, rm, new Object[] { currencyCode }); // NOSONAR
+    }
+
+    public ChargeData chargeById(final Long chargeId) {
+            final ChargeMapper rm = new ChargeMapper();
+
+            String sql = "select " + rm.chargeSchema() + " where c.id = ? and c.is_deleted=false ";
+
+            sql += addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled();
+
+            sql = sql + " ;";
+            return this.jdbcTemplate.queryForObject(sql, rm, new Object[] { chargeId }); // NOSONAR
+    }
+
+    private String addInClauseToSQL_toLimitChargesMappedToOffice_ifOfficeSpecificProductsEnabled() {
+
+        String sql = "";
+
+        // Check if branch specific products are enabled. If yes, fetch only
+        // charges mapped to current user's office
+        String inClause = fineractEntityAccessUtil
+                .getSQLWhereClauseForProductIDsForUserOffice_ifGlobalConfigEnabled(FineractEntityType.CHARGE);
+        if ((inClause != null) && !inClause.trim().isEmpty()) {
+            sql += " and c.id in ( " + inClause + " ) ";
+        }
+
+        return sql;
+    }
+
+    private static final class ChargeMapper implements RowMapper<ChargeData> {
+
+        public String chargeSchema() {
+            return "c.id as id, c.name as name, c.amount as amount, c.currency_code as currencyCode, "
+                    + "c.charge_applies_to_enum as chargeAppliesTo, c.charge_time_enum as chargeTime, "
+                    + "c.charge_payment_mode_enum as chargePaymentMode, "
+                    + "c.charge_calculation_enum as chargeCalculation, c.is_penalty as penalty, "
+                    + "c.is_active as active, c.is_free_withdrawal as isFreeWithdrawal, c.free_withdrawal_charge_frequency as freeWithdrawalChargeFrequency, c.restart_frequency as restartFrequency, c.restart_frequency_enum as restartFrequencyEnum,"
+                    + "oc.name as currencyName, oc.decimal_places as currencyDecimalPlaces, "
+                    + "oc.currency_multiplesof as inMultiplesOf, oc.display_symbol as currencyDisplaySymbol, "
+                    + "oc.internationalized_name_code as currencyNameCode, c.fee_on_day as feeOnDay, c.fee_on_month as feeOnMonth, "
+                    + "c.fee_interval as feeInterval, c.fee_frequency as feeFrequency,c.min_cap as minCap,c.max_cap as maxCap, "
+                    + "c.income_or_liability_account_id as glAccountId , acc.name as glAccountName, acc.gl_code as glCode, "
+                    + "tg.id as taxGroupId, c.is_payment_type as isPaymentType, pt.id as paymentTypeId, pt.value as paymentTypeName, tg.name as taxGroupName "
+                    + "from m_charge c " + "join m_organisation_currency oc on c.currency_code = oc.code "
+                    + " LEFT JOIN acc_gl_account acc on acc.id = c.income_or_liability_account_id "
+                    + " LEFT JOIN m_tax_group tg on tg.id = c.tax_group_id " + " LEFT JOIN m_payment_type pt on pt.id = c.payment_type_id ";
+        }
+
+        public String loanProductChargeSchema() {
+            return chargeSchema() + " join m_product_loan_charge plc on plc.charge_id = c.id";
+        }
+
+        public String savingsProductChargeSchema() {
+            return chargeSchema() + " join m_savings_product_charge spc on spc.charge_id = c.id";
+        }
+
+        public String shareProductChargeSchema() {
+            return chargeSchema() + " join m_share_product_charge mspc on mspc.charge_id = c.id";
+        }
+
+        @Override
+        public ChargeData mapRow(final ResultSet rs, @SuppressWarnings("unused") final int rowNum) throws SQLException {
+            final Long id = rs.getLong("id");
+            final String name = rs.getString("name");
+            final BigDecimal amount = rs.getBigDecimal("amount");
+
+            final String currencyCode = rs.getString("currencyCode");
+            final String currencyName = rs.getString("currencyName");
+            final String currencyNameCode = rs.getString("currencyNameCode");
+            final String currencyDisplaySymbol = rs.getString("currencyDisplaySymbol");
+            final Integer currencyDecimalPlaces = JdbcSupport.getInteger(rs, "currencyDecimalPlaces");
+            final Integer inMultiplesOf = JdbcSupport.getInteger(rs, "inMultiplesOf");
+
+            final CurrencyData currency = new CurrencyData(currencyCode, currencyName, currencyDecimalPlaces, inMultiplesOf,
+                    currencyDisplaySymbol, currencyNameCode);
+
+            final int chargeAppliesTo = rs.getInt("chargeAppliesTo");
+            final EnumOptionData chargeAppliesToType = ChargeEnumerations.chargeAppliesTo(chargeAppliesTo);
+
+            final int chargeTime = rs.getInt("chargeTime");
+            final EnumOptionData chargeTimeType = ChargeEnumerations.chargeTimeType(chargeTime);
+
+            final int chargeCalculation = rs.getInt("chargeCalculation");
+            final EnumOptionData chargeCalculationType = ChargeEnumerations.chargeCalculationType(chargeCalculation);
+
+            final int paymentMode = rs.getInt("chargePaymentMode");
+            final EnumOptionData chargePaymentMode = ChargeEnumerations.chargePaymentMode(paymentMode);
+
+            final boolean penalty = rs.getBoolean("penalty");
+            final boolean active = rs.getBoolean("active");
+
+            final Integer feeInterval = JdbcSupport.getInteger(rs, "feeInterval");
+            EnumOptionData feeFrequencyType = null;
+            final Integer feeFrequency = JdbcSupport.getInteger(rs, "feeFrequency");
+            if (feeFrequency != null) {
+                feeFrequencyType = CommonEnumerations.termFrequencyType(feeFrequency, "feeFrequency");
+            }
+            MonthDay feeOnMonthDay = null;
+            final Integer feeOnMonth = JdbcSupport.getInteger(rs, "feeOnMonth");
+            final Integer feeOnDay = JdbcSupport.getInteger(rs, "feeOnDay");
+            if (feeOnDay != null && feeOnMonth != null) {
+                feeOnMonthDay = DateUtils.safeMonthDay(feeOnMonth, feeOnDay);
+            }
+            final BigDecimal minCap = rs.getBigDecimal("minCap");
+            final BigDecimal maxCap = rs.getBigDecimal("maxCap");
+
+            // extract GL Account
+            final Long glAccountId = JdbcSupport.getLong(rs, "glAccountId");
+            final String glAccountName = rs.getString("glAccountName");
+            final String glCode = rs.getString("glCode");
+            GLAccountData glAccountData = null;
+            if (glAccountId != null) {
+                glAccountData = new GLAccountData().setId(glAccountId).setName(glAccountName).setGlCode(glCode);
+            }
+
+            final Long taxGroupId = JdbcSupport.getLong(rs, "taxGroupId");
+            final String taxGroupName = rs.getString("taxGroupName");
+            TaxGroupData taxGroupData = null;
+            if (taxGroupId != null) {
+                taxGroupData = TaxGroupData.lookup(taxGroupId, taxGroupName);
+            }
+
+            final boolean isFreeWithdrawal = rs.getBoolean("isFreeWithdrawal");
+            final int freeWithdrawalChargeFrequency = rs.getInt("freeWithdrawalChargeFrequency");
+            final int restartFrequency = rs.getInt("restartFrequency");
+            final int restartFrequencyEnum = rs.getInt("restartFrequencyEnum");
+
+            final boolean isPaymentType = rs.getBoolean("isPaymentType");
+            final Long paymentTypeId = JdbcSupport.getLong(rs, "paymentTypeId");
+
+            final String paymentTypeName = rs.getString("paymentTypeName");
+            PaymentTypeData paymentTypeData = null;
+            if (paymentTypeId != null) {
+                paymentTypeData = PaymentTypeData.builder().id(paymentTypeId).name(paymentTypeName).build();
+            }
+
+            return ChargeData.builder().id(id).name(name).amount(amount).currency(currency).chargeTimeType(chargeTimeType)
+                    .chargeAppliesTo(chargeAppliesToType).chargeCalculationType(chargeCalculationType).chargePaymentMode(chargePaymentMode)
+                    .feeOnMonthDay(feeOnMonthDay).feeInterval(feeInterval).penalty(penalty).active(active).freeWithdrawal(isFreeWithdrawal)
+                    .freeWithdrawalChargeFrequency(freeWithdrawalChargeFrequency).restartFrequency(restartFrequency)
+                    .restartFrequencyEnum(restartFrequencyEnum).isPaymentType(isPaymentType).paymentTypeOptions(paymentTypeData)
+                    .minCap(minCap).maxCap(maxCap).feeFrequency(feeFrequencyType).incomeOrLiabilityAccount(glAccountData)
+                    .taxGroup(taxGroupData).build();
+
+        }
+    }
+}
