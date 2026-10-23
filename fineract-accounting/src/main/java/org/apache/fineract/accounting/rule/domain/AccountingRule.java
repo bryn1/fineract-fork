@@ -130,17 +130,20 @@ public class AccountingRule extends AbstractPersistableCustom<Long> {
             final boolean propertyToBeUpdated) {
         if (command.isChangeInBooleanParameterNamed(paramName, propertyToBeUpdated)) {
             final Boolean newValue = command.booleanObjectValueOfParameterNamed(paramName);
-            actualChanges.put(paramName, newValue);
-            // now update actual property
+            // now update actual property - and report only changes that are actually applied: the
+            // multiple-entries flags are deliberately not applied while the side is account-based
             if (paramName.equals(AccountingRuleJsonInputParams.SYSTEM_DEFINED.getValue())) {
                 this.systemDefined = newValue;
+                actualChanges.put(paramName, newValue);
             } else if (paramName.equals(AccountingRuleJsonInputParams.ALLOW_MULTIPLE_CREDIT_ENTRIES.getValue())) {
                 if (this.accountToCredit == null) {
                     this.allowMultipleCreditEntries = newValue;
+                    actualChanges.put(paramName, newValue);
                 }
             } else if (paramName.equals(AccountingRuleJsonInputParams.ALLOW_MULTIPLE_DEBIT_ENTRIES.getValue())
                     && this.accountToDebit == null) {
                 this.allowMultipleDebitEntries = newValue;
+                actualChanges.put(paramName, newValue);
             }
         }
     }

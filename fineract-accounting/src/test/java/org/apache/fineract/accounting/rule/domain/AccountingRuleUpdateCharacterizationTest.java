@@ -96,10 +96,11 @@ class AccountingRuleUpdateCharacterizationTest {
     }
 
     @Test
-    void allowMultipleCreditEntriesIsReportedAsChangedEvenWhenDeliberatelyNotApplied() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): the boolean is guarded by accountToCredit == null
-        // before the property is written, but the change is put into the map UNCONDITIONALLY — the API result
-        // therefore reports a change that the entity refused to apply.
+    void allowMultipleCreditEntriesIsNotReportedWhenDeliberatelyNotApplied() {
+        // S2 FIX (MC 11153, suspect 6.8): the boolean overload of handlePropertyUpdate put the value into the
+        // changes map UNCONDITIONALLY while the property write was guarded by accountToCredit == null - the API
+        // result reported a change the entity had refused to apply. The put now lives inside the applied
+        // branch: the changes map reports applied state, honestly.
         GLAccount creditAccount = new GLAccount();
         creditAccount.setId(5L);
         AccountingRule rule = new AccountingRule();
@@ -109,7 +110,8 @@ class AccountingRuleUpdateCharacterizationTest {
 
         var changes = rule.update(commandFrom("{\"allowMultipleCreditEntries\":true}"));
 
-        assertEquals(Boolean.TRUE, changes.get("allowMultipleCreditEntries"));
+        assertFalse(changes.containsKey("allowMultipleCreditEntries"),
+                "the changes map must not report a change the entity deliberately did not apply");
         assertFalse(rule.isAllowMultipleCreditEntries(), "property must stay unchanged while an account-to-credit is set");
     }
 
