@@ -228,4 +228,32 @@ class AccountingRuleWritePlatformServiceCharacterizationTest {
         assertTrue(rule.isAllowMultipleCreditEntries());
         verify(accountingRuleRepository, times(1)).saveAndFlush(rule);
     }
+
+    @Test
+    void updateThroughDebitTagsReportsTheDebitFlagItActuallyApplied() {
+        // S4-D (2) — debit same-shape MIRROR of the F-2 fix (S4-D row item 2, parent-widened F-2 scope):
+        // the rule is debit-ACCOUNT-based and the PUT switches the debit side to TAGS while asking
+        // allowMultipleDebitEntries=true. domain update() refuses the flag (debit side still account-
+        // based), the service tag branch APPLIES it after clearing the account — applied must equal
+        // reported, exactly as the credit branch since F-2. Discriminating: without the mirrored fix
+        // line the changes map lacks the flag while the entity holds it (this pin was RED before the
+        // fix commit — both ways proven).
+        AccountingRule rule = new AccountingRule();
+        rule.setId(8L);
+        GLAccount debitAccount = new GLAccount();
+        debitAccount.setId(98L);
+        rule.setAccountToDebit(debitAccount);
+        when(accountingRuleRepositoryWrapper.findOneWithNotFoundDetection(8L)).thenReturn(rule);
+        when(codeValueRepository.findById(2L)).thenReturn(Optional.of(new CodeValue()));
+        when(accountingRuleRepository.saveAndFlush(any(AccountingRule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JsonCommand command = commandFrom("{\"debitTags\":[2],\"allowMultipleDebitEntries\":true}");
+
+        CommandProcessingResult result = service.updateAccountingRule(8L, command);
+
+        // reported == applied (entity truth):
+        assertEquals(true, result.getChanges().get("allowMultipleDebitEntries"));
+        assertTrue(rule.isAllowMultipleDebitEntries());
+        verify(accountingRuleRepository, times(1)).saveAndFlush(rule);
+    }
 }

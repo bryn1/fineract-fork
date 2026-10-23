@@ -258,6 +258,11 @@ public class AccountingRuleWritePlatformServiceJpaRepositoryImpl implements Acco
                     accountingRule.setAccountToDebit(null);
                     if (allowMultipleDebitEntries) {
                         accountingRule.setAllowMultipleDebitEntries(allowMultipleDebitEntries);
+                        // S4-D (2) (MC 11183): debit MIRROR of the F-2 one-liner (S4-D row item 2, parent-
+                        // widened) — applied == reported on the debit tag branch too, exactly as the credit
+                        // branch since S2; the same-shape half-invariant R-3 named is now closed on both sides.
+                        changesOnly.put(AccountingRuleJsonInputParams.ALLOW_MULTIPLE_DEBIT_ENTRIES.getValue(),
+                                allowMultipleDebitEntries);
                     }
                     changesOnly.put(AccountingRuleJsonInputParams.DEBIT_ACCOUNT_TAGS.getValue(), debitTagsToAdd);
                 }
