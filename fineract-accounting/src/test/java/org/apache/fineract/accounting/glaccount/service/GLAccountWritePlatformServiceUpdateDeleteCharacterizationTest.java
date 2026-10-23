@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -227,5 +228,27 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
 
         assertEquals(GL_ACCOUNT_ID, result.getResourceId());
         verify(glAccountRepository).delete(header);
+    }
+
+    @Test
+    void demotingHeaderToDetailIsNotGuardedAtAllEvenWithChildrenAndTransactions() {
+        // CHARACTERIZED (suspect — candidate for S2 decision): the usage-change guard reads
+        // changesOnly.containsKey(usage) && glAccount.isHeaderAccount() — it only fires when the RESULTING
+        // state is HEADER (DETAIL→HEADER promotion). The reverse edge, HEADER→DETAIL demotion while children
+        // exist, is unguarded: no journal-entry check (repository never queried), no children check — the
+        // change is applied and saved. (GLAccountInvalidUsageException exists in the module but is
+        // constructed nowhere — grep "new GLAccountInvalidUsageException" = 0 at this pin.)
+        GLAccount header = existingAccount(2); // HEADER today
+        header.setChildren(List.of(new GLAccount()));
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(header));
+        when(glAccountRepository.saveAndFlush(any(GLAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JsonCommand command = commandFrom("{\"name\":\"Renamed\",\"usage\":1}"); // → DETAIL
+
+        CommandProcessingResult result = service.updateGLAccount(GL_ACCOUNT_ID, command);
+
+        assertEquals(1, result.getChanges().get("usage"));
+        verify(glAccountRepository).saveAndFlush(header);
+        verifyNoInteractions(glJournalEntryRepository);
     }
 }

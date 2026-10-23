@@ -68,10 +68,11 @@ class AccountingRuleUpdateCharacterizationTest {
 
     @Test
     void updateOnFreshlyConstructedEntityWithoutSystemDefinedThrowsNpe() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): update() unboxes the Boolean systemDefined via
-        // the JPA-woven getter, and a never-persisted entity has it null -> NullPointerException. Only rules
-        // built by fromJson() or loaded from the DB (system_defined nullable=false column) can be updated;
-        // the entity cannot defend against update() before persistence.
+        // CHARACTERIZED (suspect — candidate for S2 decision): update() passes this.systemDefined (a nullable
+        // Boolean) into the boolean overload of handlePropertyUpdate, whose parameter is a primitive — the
+        // call-site unboxing of the null field throws. Only rules built by fromJson() or loaded from the DB
+        // (system_defined nullable=false column) can be updated; the entity cannot defend against update()
+        // before persistence.
         AccountingRule rule = new AccountingRule();
         rule.setName("Old");
 
