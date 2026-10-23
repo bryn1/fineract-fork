@@ -19,7 +19,6 @@
 package org.apache.fineract.accounting.glaccount.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -39,6 +38,7 @@ import org.apache.fineract.infrastructure.codes.domain.CodeValueRepositoryWrappe
 import org.apache.fineract.infrastructure.codes.exception.CodeValueNotFoundException;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
+import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -129,46 +129,32 @@ class GLAccountWritePlatformServiceTagResolutionCharacterizationTest {
     }
 
     @Test
-    void updateWithNegativeTagIdPassesCommandValidationThenFailsAtTheServiceTagLookup() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): chain of §6.1 — validateForUpdate's dead trailing
-        // TAGID check lets tagId=-1 through the command layer; only now does the service resolve it and the
-        // wrapper's not-found detection surface it, as CodeValueNotFoundException(-1) — the user sees a code-value
-        // error for a value the API validator should have rejected with a proper validation message.
-        GLAccount existing = new GLAccount();
-        existing.setId(GL_ACCOUNT_ID);
-        existing.setName("Cash");
-        existing.setGlCode("1001");
-        existing.setType(1);
-        existing.setUsage(1);
-        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(java.util.Optional.of(existing));
-        when(codeValueRepositoryWrapper.findOneByCodeNameAndIdWithNotFoundDetection(
-                AccountingConstants.ASSESTS_TAG_OPTION_CODE_NAME, -1L)).thenThrow(new CodeValueNotFoundException(-1L));
-
+    void updateWithNegativeTagIdIsRejectedByCommandValidationBeforeAnyLookup() {
+        // S2 FIX (MC 11153, suspects 6.1/6.3): the now-live TAGID validator rejects tagId=-1 with a proper
+        // validation error at the command layer — the service tag lookup (CodeValueNotFoundException(-1)
+        // previously) is never reached.
         JsonCommand command = commandFrom("{\"name\":\"Cash2\",\"tagId\":-1}");
 
-        assertThrows(CodeValueNotFoundException.class, () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        PlatformApiDataValidationException ex = assertThrows(PlatformApiDataValidationException.class,
+                () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        assertTrue(ex.getErrors().stream().anyMatch(e -> "tagId".equals(e.getParameterName())),
+                "expected a tagId validation error, got: " + ex.getErrors());
+        verify(glAccountRepository, never()).findById(any());
+        verify(codeValueRepositoryWrapper, never()).findOneByCodeNameAndIdWithNotFoundDetection(anyString(), any(Long.class));
     }
 
     @Test
-    void updateWithTagIdZeroIsSilentlyDroppedAsNoChange() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): GLAccount.update treats an absent tag entity as
-        // base 0L, so an explicit tagId=0 update is indistinguishable from "no tag change": no wrapper lookup,
-        // no reported change — the requested (invalid anyway) value vanishes without any error anywhere.
-        GLAccount existing = new GLAccount();
-        existing.setId(GL_ACCOUNT_ID);
-        existing.setName("Cash");
-        existing.setGlCode("1001");
-        existing.setType(1);
-        existing.setUsage(1);
-        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(java.util.Optional.of(existing));
-        when(glAccountRepository.saveAndFlush(any(GLAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
-
+    void updateWithTagIdZeroIsRejectedByCommandValidation() {
+        // S2 FIX (MC 11153, suspects 6.1/6.4): tagId=0 no longer rides the GLAccount.update 0L base-collapse
+        // (frozen core entity, unchanged) into a silent no-op — the command validator rejects it with the
+        // same longGreaterThanZero rule create already applies.
         JsonCommand command = commandFrom("{\"name\":\"Cash2\",\"tagId\":0}");
 
-        CommandProcessingResult result = service.updateGLAccount(GL_ACCOUNT_ID, command);
-
-        assertTrue(result.getChanges().containsKey("name"));
-        assertFalse(result.getChanges().containsKey("tagId"));
+        PlatformApiDataValidationException ex = assertThrows(PlatformApiDataValidationException.class,
+                () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        assertTrue(ex.getErrors().stream().anyMatch(e -> "tagId".equals(e.getParameterName())),
+                "expected a tagId validation error, got: " + ex.getErrors());
+        verify(glAccountRepository, never()).findById(any());
         verify(codeValueRepositoryWrapper, never()).findOneByCodeNameAndIdWithNotFoundDetection(anyString(), any(Long.class));
     }
 }

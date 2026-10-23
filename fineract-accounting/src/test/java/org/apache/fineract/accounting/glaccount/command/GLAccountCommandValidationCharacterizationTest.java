@@ -146,11 +146,14 @@ class GLAccountCommandValidationCharacterizationTest {
     }
 
     @Test
-    void updateSilentlyIgnoresTagIdViolations() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): validateForUpdate() throws on the collected
-        // errors list BEFORE the trailing TAGID check is added; the tagId>0 error is appended afterwards and
-        // never inspected, so an update carrying tagId=0 passes validation. The check is dead code on this path.
+    void updateRejectsNonPositiveTagIdLikeCreateDoes() {
+        // S2 FIX (MC 11153, suspect 6.1): the TAGID check now runs BEFORE the errors-list throw, so an update
+        // carrying tagId=0 or a negative tagId is rejected as a validation error — the same live rule create
+        // already enforced. (Previously the check trailed the throw and was dead on the path.)
         GLAccountCommand zeroTag = new GLAccountCommand(null, "Name", null, "1001", null, null, null, null, null, 0L);
-        assertDoesNotThrow(zeroTag::validateForUpdate);
+        assertErrorForParameter(assertThrows(PlatformApiDataValidationException.class, zeroTag::validateForUpdate), "tagId");
+
+        GLAccountCommand negativeTag = new GLAccountCommand(null, "Name", null, "1001", null, null, null, null, null, -1L);
+        assertErrorForParameter(assertThrows(PlatformApiDataValidationException.class, negativeTag::validateForUpdate), "tagId");
     }
 }
