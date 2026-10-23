@@ -152,6 +152,23 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     }
 
     @Test
+    void manualEntriesAllowedOnlyUpdateReachesTheServiceAndIsApplied() {
+        // S2 FIX (MC 11153, suspect 6.5 — DA-gate completion of the guard set): manualEntriesAllowed is likewise
+        // an updatable property (applied and reported by GLAccount.update) yet trailed the guard set too, so a
+        // manualEntriesAllowed-only PUT still died at "No parameters passed for update."; the guard now covers
+        // exactly the nine updatable parameters.
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(existingAccount(1)));
+        when(glAccountRepository.saveAndFlush(any(GLAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JsonCommand command = commandFrom("{\"manualEntriesAllowed\":false}");
+
+        CommandProcessingResult result = service.updateGLAccount(GL_ACCOUNT_ID, command);
+
+        assertEquals(false, result.getChanges().get("manualEntriesAllowed"));
+        verify(glAccountRepository).saveAndFlush(any(GLAccount.class));
+    }
+
+    @Test
     void changingUsageToHeaderTogetherWithANameChangeWhenJournalEntriesExistIsRejected() {
         when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(existingAccount(1))); // DETAIL today
         when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(true);
