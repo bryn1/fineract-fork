@@ -20,6 +20,7 @@ package org.apache.fineract.accounting.rule.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -200,5 +201,31 @@ class AccountingRuleWritePlatformServiceCharacterizationTest {
 
         assertEquals(7L, result.getResourceId());
         verify(accountingRuleRepository, times(1)).delete(rule);
+    }
+
+    @Test
+    void updateThroughCreditTagsReportsTheCreditFlagItActuallyApplied() {
+        // F-2 FIX PIN (MC 11163, the 6.8 compound account→tag PUT): the rule is credit-ACCOUNT-based and the
+        // PUT switches the credit side to TAGS while asking allowMultipleCreditEntries=true. domain update()
+        // legitimately refuses the flag at that moment (the side is still account-based — S2 row 6.8), then the
+        // service's tag branch APPLIES it after clearing the account. Since the F-2 one-line fix the flag is
+        // also REPORTED in changesOnly: applied == reported on this path, pinned end-to-end here.
+        AccountingRule rule = new AccountingRule();
+        rule.setId(7L);
+        GLAccount creditAccount = new GLAccount();
+        creditAccount.setId(99L);
+        rule.setAccountToCredit(creditAccount);
+        when(accountingRuleRepositoryWrapper.findOneWithNotFoundDetection(7L)).thenReturn(rule);
+        when(codeValueRepository.findById(1L)).thenReturn(Optional.of(new CodeValue()));
+        when(accountingRuleRepository.saveAndFlush(any(AccountingRule.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JsonCommand command = commandFrom("{\"creditTags\":[1],\"allowMultipleCreditEntries\":true}");
+
+        CommandProcessingResult result = service.updateAccountingRule(7L, command);
+
+        // reported == applied (entity truth):
+        assertEquals(true, result.getChanges().get("allowMultipleCreditEntries"));
+        assertTrue(rule.isAllowMultipleCreditEntries());
+        verify(accountingRuleRepository, times(1)).saveAndFlush(rule);
     }
 }

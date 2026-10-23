@@ -236,6 +236,11 @@ public class AccountingRuleWritePlatformServiceJpaRepositoryImpl implements Acco
                     accountingRule.setAccountToCredit(null);
                     if (allowMultipleCreditEntries) {
                         accountingRule.setAllowMultipleCreditEntries(allowMultipleCreditEntries);
+                        // F-2 (MC 11163): applied == reported (S2 row 6.8 invariant) — a credit flag applied via
+                        // the tag branch lands in changesOnly, exactly as the domain path reports it when it
+                        // applies the flag itself.
+                        changesOnly.put(AccountingRuleJsonInputParams.ALLOW_MULTIPLE_CREDIT_ENTRIES.getValue(),
+                                allowMultipleCreditEntries);
                     }
                     changesOnly.put(AccountingRuleJsonInputParams.CREDIT_ACCOUNT_TAGS.getValue(), creditTagsToAdd);
                 }
