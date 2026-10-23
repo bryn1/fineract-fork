@@ -493,7 +493,7 @@ class ChargeReadPlatformServiceImplCharacterizationTest {
         assertNull(data.getPaymentTypeOptions());
         assertTrue(data.isFreeWithdrawal());
         assertEquals(Integer.valueOf(0), data.getFreeWithdrawalChargeFrequency(),
-                "NULL frequency columns arrive as primitive 0 via getInt — never null on the DTO (S-R2)");
+                "NULL frequency columns arrive as primitive 0 via getInt — never null on the DTO (S-R4)");
         assertEquals(Integer.valueOf(0), data.getRestartFrequencyEnum());
         assertNull(data.getFeeInterval());
     }
