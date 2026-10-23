@@ -51,6 +51,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
+import org.apache.fineract.accounting.common.AccountingNativeSqlExecutor;
+import org.apache.fineract.accounting.provisioning.domain.ProvisioningEntriesReadRepository;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -122,8 +124,9 @@ class ProvisioningEntriesReadPlatformServiceImplCharacterizationTest {
 
     // the single line S4c's peel commit is allowed to change (mechanism injection; assertions may not move)
     private ProvisioningEntriesReadPlatformServiceImpl newService() {
-        return new ProvisioningEntriesReadPlatformServiceImpl(new JdbcTemplate(this.dataSource), mock(PaginationHelper.class),
-                mock(PaginationHelper.class), new DatabaseSpecificSQLGenerator(this.databaseTypeResolver, null));
+        return new ProvisioningEntriesReadPlatformServiceImpl(new ProvisioningEntriesReadRepository(
+                new AccountingNativeSqlExecutor(this.dataSource), new DatabaseSpecificSQLGenerator(this.databaseTypeResolver, null),
+                new JdbcTemplate(this.dataSource), mock(PaginationHelper.class), mock(PaginationHelper.class)));
     }
 
     @BeforeEach
