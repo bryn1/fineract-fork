@@ -43,8 +43,9 @@ import org.springframework.stereotype.Repository;
  * {@link org.apache.fineract.accounting.provisioning.service.ProvisioningEntriesReadPlatformServiceImpl},
  * moved verbatim (all four ResultSet mappers, the like-wildcard, the grouped-sum statement and the
  * dialect-expanded loan-products schema included) behind the module repository on
- * {@link AccountingNativeSqlExecutor} (research/05 S4-T row). The two PaginationHelper hand-offs stay in
- * the service — they are core-infra execution, not accounting SQL paths (named residual).
+ * {@link AccountingNativeSqlExecutor} (research/05 S4-T row). The two PaginationHelper fetchPage hand-offs
+ * moved into this class with them (see the JdbcTemplate field comment below): core-infra execution of
+ * count+page, not an accounting-owned SQL path — the named residual of the S4-T converge leg.
  */
 @Repository
 @RequiredArgsConstructor
