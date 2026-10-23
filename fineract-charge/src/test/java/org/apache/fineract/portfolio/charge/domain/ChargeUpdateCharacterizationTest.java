@@ -166,7 +166,11 @@ class ChargeUpdateCharacterizationTest {
         Charge c = loanDisbursementCharge();
         assertThrows(PlatformApiDataValidationException.class,
                 () -> c.update(command("{\"feeFrequency\": 2, \"locale\": \"en\"}")));
-        Map<String, Object> followUp = c.update(command("{\"feeInterval\": 3, \"locale\": \"en\"}"));
+        // discriminating follow-up (S4 gate F-A): re-send feeFrequency=2 TOGETHER with feeInterval=3 —
+        // only an entity that ALREADY holds feeFrequency=2 (the pre-throw mutation) reports no change for
+        // feeFrequency; under validate-before-mutate the rejected update would not have applied it and this
+        // map WOULD carry feeFrequency — the assertion below then flips RED.
+        Map<String, Object> followUp = c.update(command("{\"feeFrequency\": 2, \"feeInterval\": 3, \"locale\": \"en\"}"));
         assertEquals(3, followUp.get("feeInterval"));
         assertFalse(followUp.containsKey("feeFrequency"),
                 "the rejected feeFrequency=2 was applied BEFORE the throw: the follow-up sees it as no change");
