@@ -27,7 +27,6 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -230,16 +229,33 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     }
 
     @Test
-    void demotingHeaderToDetailIsNotGuardedAtAllEvenWithChildrenAndTransactions() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): the usage-change guard reads
-        // changesOnly.containsKey(usage) && glAccount.isHeaderAccount() — it only fires when the RESULTING
-        // state is HEADER (DETAIL→HEADER promotion). The reverse edge, HEADER→DETAIL demotion while children
-        // exist, is unguarded: no journal-entry check (repository never queried), no children check — the
-        // change is applied and saved. (GLAccountInvalidUsageException exists in the module but is
-        // constructed nowhere — grep "new GLAccountInvalidUsageException" = 0 at this pin.)
+    void demotingHeaderToDetailWithChildrenAndTransactionsIsRejected() {
+        // S2 FIX (MC 11153, suspect 6.6): the usage-change guard is now two-directional — a HEADER→DETAIL
+        // demotion while child accounts exist or transactions are logged against the account throws
+        // GLAccountInvalidUpdateException(HEADER_DEMOTED_WITH_CHILDREN_OR_TRANSACTIONS) before any save.
+        // (D-2 resolved alongside: the dead GLAccountInvalidUsageException class was deleted — its stated
+        // "invalid COA type" concern is owned by GLAccountInvalidClassificationException, and the update-
+        // guard concern by this exception's reason enum. One implementation per concern.)
         GLAccount header = existingAccount(2); // HEADER today
         header.setChildren(List.of(new GLAccount()));
         when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(header));
+        when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(true);
+
+        JsonCommand command = commandFrom("{\"name\":\"Renamed\",\"usage\":1}"); // → DETAIL
+
+        GLAccountInvalidUpdateException ex = assertThrows(GLAccountInvalidUpdateException.class,
+                () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        assertEquals("error.msg.glaccount.glcode.invalid.update.header.demotion", ex.getGlobalisationMessageCode());
+        verify(glAccountRepository, never()).saveAndFlush(any(GLAccount.class));
+    }
+
+    @Test
+    void demotingHeaderToDetailWithoutChildrenOrTransactionsIsAllowed() {
+        // positive control for the new demotion guard: an empty header (no children, no journal entries)
+        // demotes normally — the guard fires on the structural danger, not on demotion per se
+        GLAccount header = existingAccount(2); // HEADER today
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(header));
+        when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(false);
         when(glAccountRepository.saveAndFlush(any(GLAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         JsonCommand command = commandFrom("{\"name\":\"Renamed\",\"usage\":1}"); // → DETAIL
@@ -248,6 +264,5 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
 
         assertEquals(1, result.getChanges().get("usage"));
         verify(glAccountRepository).saveAndFlush(header);
-        verifyNoInteractions(glJournalEntryRepository);
     }
 }

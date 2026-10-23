@@ -28,11 +28,16 @@ public class GLAccountInvalidUpdateException extends AbstractPlatformDomainRuleE
     /*** Enum of reasons for invalid delete **/
     public enum GlAccountInvalidUpdateReason {
 
-        TRANSANCTIONS_LOGGED; //
+        TRANSANCTIONS_LOGGED, //
+        HEADER_DEMOTED_WITH_CHILDREN_OR_TRANSACTIONS; //
 
         public String errorMessage() {
             if (name().equalsIgnoreCase("TRANSANCTIONS_LOGGED")) {
                 return "This (detail) GL Account cannot be updated as it already has transactions logged against it";
+            }
+            if (name().equalsIgnoreCase("HEADER_DEMOTED_WITH_CHILDREN_OR_TRANSACTIONS")) {
+                return "This header GL Account cannot be demoted to a detail account while it has child accounts or transactions logged "
+                        + "against it";
             }
             return name();
         }
@@ -40,6 +45,9 @@ public class GLAccountInvalidUpdateException extends AbstractPlatformDomainRuleE
         public String errorCode() {
             if (name().equalsIgnoreCase("TRANSANCTIONS_LOGGED")) {
                 return "error.msg.glaccount.glcode.invalid.update.transactions.logged";
+            }
+            if (name().equalsIgnoreCase("HEADER_DEMOTED_WITH_CHILDREN_OR_TRANSACTIONS")) {
+                return "error.msg.glaccount.glcode.invalid.update.header.demotion";
             }
             return name();
         }

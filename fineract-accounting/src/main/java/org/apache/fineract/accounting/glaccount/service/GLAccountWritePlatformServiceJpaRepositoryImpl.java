@@ -148,13 +148,20 @@ public class GLAccountWritePlatformServiceJpaRepositoryImpl implements GLAccount
             }
 
             /**
-             * a detail account cannot be changed to a header account if transactions are already logged against it
+             * a detail account cannot be changed to a header account if transactions are already logged against
+             * it, and a header account cannot be demoted to a detail account while it has child accounts (the
+             * children would hang off a detail parent) or transactions logged against it
              **/
-            if (changesOnly.containsKey(GLAccountJsonInputParams.USAGE.getValue()) && glAccount.isHeaderAccount()) {
+            if (changesOnly.containsKey(GLAccountJsonInputParams.USAGE.getValue())) {
                 final boolean journalEntriesForAccountExist = this.glJournalEntryRepository
                         .exists((root, query, criteriaBuilder) -> criteriaBuilder.equal(root.get(GL_ACCOUNT).get("id"), glAccountId));
-                if (journalEntriesForAccountExist) {
-                    throw new GLAccountInvalidUpdateException(GlAccountInvalidUpdateReason.TRANSANCTIONS_LOGGED, glAccountId);
+                if (glAccount.isHeaderAccount()) {
+                    if (journalEntriesForAccountExist) {
+                        throw new GLAccountInvalidUpdateException(GlAccountInvalidUpdateReason.TRANSANCTIONS_LOGGED, glAccountId);
+                    }
+                } else if (!glAccount.getChildren().isEmpty() || journalEntriesForAccountExist) {
+                    throw new GLAccountInvalidUpdateException(GlAccountInvalidUpdateReason.HEADER_DEMOTED_WITH_CHILDREN_OR_TRANSACTIONS,
+                            glAccountId);
                 }
             }
 
