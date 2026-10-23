@@ -21,7 +21,6 @@ package org.apache.fineract.accounting.rule.domain;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.fineract.accounting.glaccount.domain.GLAccount;
@@ -67,16 +66,18 @@ class AccountingRuleUpdateCharacterizationTest {
     }
 
     @Test
-    void updateOnFreshlyConstructedEntityWithoutSystemDefinedThrowsNpe() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): update() passes this.systemDefined (a nullable
-        // Boolean) into the boolean overload of handlePropertyUpdate, whose parameter is a primitive — the
-        // call-site unboxing of the null field throws. Only rules built by fromJson() or loaded from the DB
-        // (system_defined nullable=false column) can be updated; the entity cannot defend against update()
-        // before persistence.
+    void updateOnFreshlyConstructedEntityIsSafeAndReportsTheChange() {
+        // S2 FIX (MC 11153, suspect 6.9): update() passed the nullable Boolean systemDefined straight into the
+        // primitive-boolean overload of handlePropertyUpdate — call-site unboxing of the null field threw NPE
+        // on any never-persisted entity. The call site is now null-safe with the same null-means-false base
+        // the neighbouring reference properties use; update() on a fresh entity reports the change.
         AccountingRule rule = new AccountingRule();
         rule.setName("Old");
 
-        assertThrows(NullPointerException.class, () -> rule.update(commandFrom("{\"name\":\"New\"}")));
+        var changes = rule.update(commandFrom("{\"name\":\"New\"}"));
+
+        assertEquals("New", changes.get("name"));
+        assertEquals("New", rule.getName());
     }
 
     @Test
