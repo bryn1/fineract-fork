@@ -43,7 +43,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.apache.fineract.accounting.common.AccountingNativeSqlExecutor;
+import org.apache.fineract.accounting.financialactivityaccount.domain.FinancialActivityAccountReadRepository;
 
 /**
  * S4 gate PASS C pins (MC 11183): characterization of the two FinancialActivityAccount read queries at
@@ -73,7 +74,8 @@ class FinancialActivityAccountReadPlatformServiceImplCharacterizationTest {
 
     // the single line S4c's peel commit is allowed to change (mechanism injection; assertions may not move)
     private FinancialActivityAccountReadPlatformServiceImpl newService() {
-        return new FinancialActivityAccountReadPlatformServiceImpl(new JdbcTemplate(this.dataSource),
+        return new FinancialActivityAccountReadPlatformServiceImpl(
+                new FinancialActivityAccountReadRepository(new AccountingNativeSqlExecutor(this.dataSource)),
                 this.accountingDropdownReadPlatformService);
     }
 
