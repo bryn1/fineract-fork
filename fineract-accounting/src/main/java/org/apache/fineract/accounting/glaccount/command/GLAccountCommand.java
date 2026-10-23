@@ -93,7 +93,8 @@ public record GLAccountCommand(Long id, String name, Long parentId, String glCod
 
         baseDataValidator.reset().parameter(GLAccountJsonInputParams.DISABLED.getValue()).value(this.disabled).ignoreIfNull();
 
-        baseDataValidator.reset().anyOfNotNull(this.name, this.glCode, this.parentId, this.type, this.description, this.disabled);
+        baseDataValidator.reset().anyOfNotNull(this.name, this.glCode, this.parentId, this.type, this.usage, this.description, this.disabled,
+                this.tagId);
 
         baseDataValidator.reset().parameter(GLAccountJsonInputParams.TAGID.getValue()).value(this.tagId).ignoreIfNull()
                 .longGreaterThanZero();

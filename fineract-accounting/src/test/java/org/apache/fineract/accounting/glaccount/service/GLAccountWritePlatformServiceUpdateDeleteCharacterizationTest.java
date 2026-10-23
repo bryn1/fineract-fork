@@ -22,7 +22,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,7 +47,6 @@ import org.apache.fineract.accounting.producttoaccountmapping.domain.ProductToGL
 import org.apache.fineract.infrastructure.codes.domain.CodeValueRepositoryWrapper;
 import org.apache.fineract.infrastructure.core.api.JsonCommand;
 import org.apache.fineract.infrastructure.core.data.CommandProcessingResult;
-import org.apache.fineract.infrastructure.core.exception.PlatformApiDataValidationException;
 import org.apache.fineract.infrastructure.core.serialization.FromJsonHelper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -140,17 +138,18 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     }
 
     @Test
-    void usageOnlyUpdateNeverReachesTheServiceGuards() {
-        // CHARACTERIZED (suspect — candidate for S2 decision): validateForUpdate's anyOfNotNull list covers
-        // name/glCode/parentId/type/description/disabled but NOT usage (nor manualEntriesAllowed/tagId), so a
-        // usage-only PUT fails with "No parameters passed for update." before the header/transactions guard can
-        // ever run. Usage can only be changed bundled with one of the six listed parameters.
+    void usageOnlyUpdateReachesTheServiceUsageGuard() {
+        // S2 FIX (MC 11153, suspect 6.5): validateForUpdate's anyOfNotNull guard now covers every updatable
+        // parameter (usage and tagId were missing), so a usage-only PUT reaches the service-level usage
+        // guard — DETAIL→HEADER promotion with transactions logged is rejected there (previously the PUT
+        // died at the command layer with "No parameters passed for update." and the guard never ran).
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(existingAccount(1))); // DETAIL today
+        when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(true);
+
         JsonCommand command = commandFrom("{\"usage\":2}");
-        PlatformApiDataValidationException ex = assertThrows(PlatformApiDataValidationException.class,
+        GLAccountInvalidUpdateException ex = assertThrows(GLAccountInvalidUpdateException.class,
                 () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
-        assertTrue(ex.getErrors().stream().anyMatch(e -> "id".equals(e.getParameterName())),
-                "expected the aggregated no.parameters.for.update error, got: " + ex.getErrors());
-        verify(glAccountRepository, never()).findById(any());
+        assertEquals("error.msg.glaccount.glcode.invalid.update.transactions.logged", ex.getGlobalisationMessageCode());
     }
 
     @Test

@@ -157,4 +157,30 @@ class GLAccountWritePlatformServiceTagResolutionCharacterizationTest {
         verify(glAccountRepository, never()).findById(any());
         verify(codeValueRepositoryWrapper, never()).findOneByCodeNameAndIdWithNotFoundDetection(anyString(), any(Long.class));
     }
+
+    @Test
+    void updateWithValidTagIdOnlyReachesTheServiceTagLookup() {
+        // S2 FIX (MC 11153, suspect 6.5 — same anyOfNotNull guard line): TAGID was missing from the guard, so a
+        // valid tagId-only PUT was rejected as "no parameters passed for update" and the service tag update was
+        // unreachable in isolation. The guard now covers it: the tag resolves through the code-name wrapper
+        // and the change is applied.
+        GLAccount existing = new GLAccount();
+        existing.setId(GL_ACCOUNT_ID);
+        existing.setName("Cash");
+        existing.setGlCode("1001");
+        existing.setType(1);
+        existing.setUsage(1);
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(java.util.Optional.of(existing));
+        when(codeValueRepositoryWrapper.findOneByCodeNameAndIdWithNotFoundDetection(
+                AccountingConstants.ASSESTS_TAG_OPTION_CODE_NAME, 7L)).thenReturn(new CodeValue());
+        when(glAccountRepository.saveAndFlush(any(GLAccount.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        JsonCommand command = commandFrom("{\"tagId\":7}");
+
+        CommandProcessingResult result = service.updateGLAccount(GL_ACCOUNT_ID, command);
+
+        assertEquals(7L, result.getChanges().get("tagId"));
+        verify(codeValueRepositoryWrapper).findOneByCodeNameAndIdWithNotFoundDetection(
+                AccountingConstants.ASSESTS_TAG_OPTION_CODE_NAME, 7L);
+    }
 }
