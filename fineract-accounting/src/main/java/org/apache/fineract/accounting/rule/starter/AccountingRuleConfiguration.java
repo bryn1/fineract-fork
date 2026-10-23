@@ -19,7 +19,7 @@
 package org.apache.fineract.accounting.rule.starter;
 
 import org.apache.fineract.accounting.glaccount.domain.GLAccountRepositoryWrapper;
-import org.apache.fineract.accounting.glaccount.service.GLAccountReadPlatformService;
+import org.apache.fineract.accounting.rule.domain.AccountingRuleReadRepository;
 import org.apache.fineract.accounting.rule.domain.AccountingRuleRepository;
 import org.apache.fineract.accounting.rule.domain.AccountingRuleRepositoryWrapper;
 import org.apache.fineract.accounting.rule.serialization.AccountingRuleCommandFromApiJsonDeserializer;
@@ -32,16 +32,15 @@ import org.apache.fineract.organisation.office.domain.OfficeRepositoryWrapper;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.jdbc.core.JdbcTemplate;
 
 @Configuration
 public class AccountingRuleConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(AccountingRuleReadPlatformService.class)
-    public AccountingRuleReadPlatformService accountingRuleReadPlatformService(JdbcTemplate jdbcTemplate,
-            GLAccountReadPlatformService glAccountReadPlatformService) {
-        return new AccountingRuleReadPlatformServiceImpl(jdbcTemplate, glAccountReadPlatformService);
+    public AccountingRuleReadPlatformService accountingRuleReadPlatformService(
+            AccountingRuleReadRepository accountingRuleReadRepository) {
+        return new AccountingRuleReadPlatformServiceImpl(accountingRuleReadRepository);
     }
 
     @Bean
