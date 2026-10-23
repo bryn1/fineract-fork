@@ -38,8 +38,11 @@ import org.springframework.jdbc.support.SQLExceptionTranslator;
 import org.springframework.stereotype.Component;
 
 /**
- * Module-local execution seam for the raw SQL of the accounting read queries (MC 11163, S3 peel): the services
- * no longer run SQL themselves and the module keeps no JdbcTemplate instance (research/04 S3 mechanism row).
+ * Module-local execution seam for the raw SQL of the accounting read queries (MC 11163, S3 peel; S4-T
+ * converged research/05): the services no longer run SQL themselves and no accounting-owned dotted
+ * JdbcTemplate SQL path exists (module probe 0). Single named residual: one JdbcTemplate instance in
+ * ProvisioningEntriesReadRepository serves only as the PaginationHelper fetchPage hand-off argument —
+ * core-infra execution of count+page, not an accounting SQL path.
  *
  * <p>
  * It is provider-agnostic on purpose (this module excludes Hibernate and compiles JPA against the EclipseLink
