@@ -45,7 +45,8 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
-import org.springframework.jdbc.core.JdbcTemplate;
+import org.apache.fineract.accounting.closure.domain.GLClosureReadRepository;
+import org.apache.fineract.accounting.common.AccountingNativeSqlExecutor;
 
 /**
  * S4 gate PASS C pins (MC 11183): characterization of the two GLClosure read queries at the JDBC seam —
@@ -79,7 +80,8 @@ class GLClosureReadPlatformServiceImplCharacterizationTest {
 
     // the single line S4c's peel commit is allowed to change (mechanism injection; assertions may not move)
     private GLClosureReadPlatformServiceImpl newService() {
-        return new GLClosureReadPlatformServiceImpl(new JdbcTemplate(this.dataSource));
+        return new GLClosureReadPlatformServiceImpl(
+                new GLClosureReadRepository(new AccountingNativeSqlExecutor(this.dataSource)));
     }
 
     @BeforeEach
