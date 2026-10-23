@@ -264,6 +264,40 @@ class GLAccountWritePlatformServiceUpdateDeleteCharacterizationTest {
     }
 
     @Test
+    void demotingHeaderToDetailWithChildrenOnlyIsRejected() {
+        // S4-D pin-split (F-C P3, 6.6): the existing demotion pin stubs children AND transactions both
+        // true, so deleting EITHER single disjunct from the guard stays green there. Children-only:
+        // transactions absent, children present -> the children disjunct alone must reject.
+        GLAccount header = existingAccount(2); // HEADER today
+        header.setChildren(List.of(new GLAccount()));
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(header));
+        when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(false);
+
+        JsonCommand command = commandFrom("{\"name\":\"Renamed\",\"usage\":1}"); // -> DETAIL
+
+        GLAccountInvalidUpdateException ex = assertThrows(GLAccountInvalidUpdateException.class,
+                () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        assertEquals("error.msg.glaccount.glcode.invalid.update.header.demotion", ex.getGlobalisationMessageCode());
+        verify(glAccountRepository, never()).saveAndFlush(any(GLAccount.class));
+    }
+
+    @Test
+    void demotingHeaderToDetailWithTransactionsOnlyIsRejected() {
+        // S4-D pin-split (F-C P3, 6.6): transactions-only — no children, journal entries exist -> the
+        // transactions disjunct alone must reject.
+        GLAccount header = existingAccount(2); // HEADER today
+        when(glAccountRepository.findById(GL_ACCOUNT_ID)).thenReturn(Optional.of(header));
+        when(glJournalEntryRepository.exists(ArgumentMatchers.<Specification<JournalEntry>>any())).thenReturn(true);
+
+        JsonCommand command = commandFrom("{\"name\":\"Renamed\",\"usage\":1}"); // -> DETAIL
+
+        GLAccountInvalidUpdateException ex = assertThrows(GLAccountInvalidUpdateException.class,
+                () -> service.updateGLAccount(GL_ACCOUNT_ID, command));
+        assertEquals("error.msg.glaccount.glcode.invalid.update.header.demotion", ex.getGlobalisationMessageCode());
+        verify(glAccountRepository, never()).saveAndFlush(any(GLAccount.class));
+    }
+
+    @Test
     void demotingHeaderToDetailWithoutChildrenOrTransactionsIsAllowed() {
         // positive control for the new demotion guard: an empty header (no children, no journal entries)
         // demotes normally — the guard fires on the structural danger, not on demotion per se
